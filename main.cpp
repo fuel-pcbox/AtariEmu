@@ -29,6 +29,14 @@ namespace Memory
       return os[addr - 0xD800];
     }
   }
+  //Write byte
+  void wb(u16 addr, u8 data)
+  {
+    if(addr < 0x2000)
+    {
+      ram[addr] = data;
+    }
+  }
 }  
 
 #ifdef DEBUG
@@ -131,6 +139,9 @@ namespace CPU
     {
       if(!execing)
       {
+        instructionreg = Memory::rb(pc);
+        pc++;
+        cycle = 0;
         debug_print("opcode: %02x\n",instructionreg);
         debug_print("a: %02x\n",a);
         debug_print("x: %02x\n",x);
@@ -138,13 +149,84 @@ namespace CPU
         debug_print("s: %02x\n",s);
         debug_print("flags: %02x\n",flags);
         debug_print("pc: %04x\n",pc);
-        instructionreg = Memory::rb(pc);
-        pc++;
-        cycle = 0;
         execing = true;
       }
       switch(instructionreg)
       {
+        case 0x10:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              tmp1 = Memory::rb(pc);
+              pc++;
+              cycle++;
+              break;
+            }
+            case 1:
+            {
+              tmp2 = Memory::rb(pc);
+              if(!(flags & 0x80))
+              {
+                tmp3 = pc + (s8)tmp1;
+                pc = (pc & 0xFF00) | ((pc & 0xFF) + (s8)tmp1);
+                cycle++;
+              }
+              else execing = false;
+              break;
+            }
+            case 2:
+            {
+              tmp2 = Memory::rb(pc);
+              if(tmp3 < pc) pc -= 0x100;
+              if(tmp3 > pc) pc += 0x100;
+              execing = false;
+              break;
+            }
+          }
+          break;
+        }
+        case 0x20:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              tmp3 = Memory::rb(pc);
+              pc++;
+              cycle++;
+              break;
+            }
+            case 1:
+            {
+              Memory::rb(0x100 + s);
+              cycle++;
+              break;
+            }
+            case 2:
+            {
+              Memory::wb(0x100 + s, pc >> 8);
+              s--;
+              cycle++;
+              break;
+            }
+            case 3:
+            {
+              Memory::wb(0x100 + s, pc & 0xFF);
+              s--;
+              cycle++;
+              break;
+            }
+            case 4:
+            {
+              tmp3 |= Memory::rb(pc) << 8;
+              pc = tmp3;
+              execing = false;
+            }
+          }
+          break;
+        }
         case 0x78:
         {
           switch(cycle)
@@ -159,6 +241,279 @@ namespace CPU
           }
           break;
         }
+        case 0x84:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              tmp1 = Memory::rb(pc);
+              pc++;
+              cycle++;
+              break;
+            }
+            case 1:
+            {
+              Memory::wb(tmp1,a);
+              execing = false;
+              break;
+            }
+          }
+          break;
+        }
+        case 0x85:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              tmp1 = Memory::rb(pc);
+              pc++;
+              cycle++;
+              break;
+            }
+            case 1:
+            {
+              Memory::wb(tmp1,x);
+              execing = false;
+              break;
+            }
+          }
+          break;
+        }
+        case 0x9A:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              Memory::rb(pc);
+              s = x; 
+              execing = false;
+              break;
+            }
+          }
+          break;
+        }
+        case 0xA0:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              y = Memory::rb(pc);
+              pc++;
+              if(y & 0x80) flags |= 0x80;
+              else flags &= 0x7F;
+              if(y == 0) flags |= 0x02;
+              else flags &= 0xFD;
+              execing = false;
+              break;
+            }
+          }
+          break;
+        }
+        case 0xA2:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              x = Memory::rb(pc);
+              pc++;
+              if(x & 0x80) flags |= 0x80;
+              else flags &= 0x7F;
+              if(x == 0) flags |= 0x02;
+              else flags &= 0xFD;
+              execing = false;
+              break;
+            }
+          }
+          break;
+        }
+        case 0xA9:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              a = Memory::rb(pc);
+              pc++;
+              if(a & 0x80) flags |= 0x80;
+              else flags &= 0x7F;
+              if(a == 0) flags |= 0x02;
+              else flags &= 0xFD;
+              execing = false;
+              break;
+            }
+          }
+          break;
+        }
+        case 0xAD:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              tmp3 = Memory::rb(pc);
+              pc++;
+              cycle++;
+              break;
+            }
+            case 1:
+            {
+              tmp3 |= Memory::rb(pc) << 8;
+              pc++;
+              cycle++;
+              break;
+            }
+            case 2:
+            {
+              a = Memory::rb(tmp3);
+              if(a & 0x80) flags |= 0x80;
+              else flags &= 0x7F;
+              if(a == 0) flags |= 0x02;
+              else flags &= 0xFD;
+              execing = false;
+              break;
+            }
+          }
+          break;
+        }
+        case 0xCE:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              tmp3 = Memory::rb(pc);
+              pc++;
+              cycle++;
+              break;
+            }
+            case 1:
+            {
+              tmp3 |= Memory::rb(pc) << 8;
+              pc++;
+              cycle++;
+              break;
+            }
+            case 2:
+            {
+              tmp1 = Memory::rb(tmp3);
+              cycle++;
+              break;
+            }
+            case 3:
+            {
+              Memory::wb(tmp3,tmp1);
+              tmp1--;
+              if(tmp1 & 0x80) flags |= 0x80;
+              else flags &= 0x7F;
+              if(tmp1 == 0) flags |= 0x02;
+              else flags &= 0xFD;
+              cycle++;
+              break;
+            }
+            case 4:
+            {
+              Memory::wb(tmp3,tmp1);
+              execing = false;
+            }
+          }
+          break;
+        }
+        case 0xD0:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              tmp1 = Memory::rb(pc);
+              pc++;
+              cycle++;
+              break;
+            }
+            case 1:
+            {
+              tmp2 = Memory::rb(pc);
+              if(!(flags & 2))
+              {
+                tmp3 = pc + (s8)tmp1;
+                pc = (pc & 0xFF00) | ((pc & 0xFF) + (s8)tmp1);
+                cycle++;
+              }
+              else execing = false;
+              break;
+            }
+            case 2:
+            {
+              tmp2 = Memory::rb(pc);
+              if(tmp3 < pc) pc -= 0x100;
+              if(tmp3 > pc) pc += 0x100;
+              execing = false;
+              break;
+            }
+          }
+          break;
+        }
+        case 0xD8:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              Memory::rb(pc);
+              flags &= 0xF7;
+              execing = false;
+              break;
+            }
+          }
+          break;
+        }
+        case 0xEE:
+        {
+          switch(cycle)
+          {
+            case 0:
+            {
+              tmp3 = Memory::rb(pc);
+              pc++;
+              cycle++;
+              break;
+            }
+            case 1:
+            {
+              tmp3 |= Memory::rb(pc) << 8;
+              pc++;
+              cycle++;
+              break;
+            }
+            case 2:
+            {
+              tmp1 = Memory::rb(tmp3);
+              cycle++;
+              break;
+            }
+            case 3:
+            {
+              Memory::wb(tmp3,tmp1);
+              tmp1++;
+              if(tmp1 & 0x80) flags |= 0x80;
+              else flags &= 0x7F;
+              if(tmp1 == 0) flags |= 0x02;
+              else flags &= 0xFD;
+              cycle++;
+              break;
+            }
+            case 4:
+            {
+              Memory::wb(tmp3,tmp1);
+              execing = false;
+            }
+          }
+          break;
+        }
       }
     }
   }
@@ -167,7 +522,7 @@ namespace CPU
 int main()
 {
   CPU::loadroms();
-  for(int i = 0;i<50;i++)
+  for(int i = 0;i<100;i++)
   {
     CPU::tick();
   }
