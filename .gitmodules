@@ -1,0 +1,3 @@
+[submodule "6502Core"]
+	path = 6502Core
+	url = git@github.com:MoochMcGee/6502Core.git
